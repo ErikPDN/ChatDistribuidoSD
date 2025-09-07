@@ -84,7 +84,29 @@ public class Server {
     }
   }
 
-  // Futuramente, podemos adicionar um método para mensagens privadas.
-  // public static void sendPrivateMessage(String recipient, String message) { ...
-  // }
+
+  /**
+   * Envia uma mensagem privada de um usuário para outro.
+   *
+   * @param senderUsername    O nome do remetente.
+   * @param recipientUsername O nome do destinatário.
+   * @param message           O conteúdo da mensagem.
+   */
+  public static void sendPrivateMessage(String senderUsername, String recipientUsername, String message) {
+    String timestamp = LocalDateTime.now().format(FORMATTER);
+
+    ClientHandler recipientHandler = clients.get(recipientUsername);
+
+    if (recipientHandler != null) {
+      // Se o destinatário for encontrado, envia a mensagem para ele.
+      String formattedMessage = String.format("[%s] (privado) %s: %s", timestamp, senderUsername, message);
+      recipientHandler.sendMessage(formattedMessage);
+    } else {
+      // Se o destinatário não for encontrado, avisa o remetente.
+      ClientHandler senderHandler = clients.get(senderUsername);
+      if (senderHandler != null) {
+        senderHandler.sendMessage("Servidor: Usuário '" + recipientUsername + "' não encontrado ou offline.");
+      }
+    }
+  }
 }
