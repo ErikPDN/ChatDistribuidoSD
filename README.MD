@@ -17,9 +17,26 @@ Para compilar e executar este projeto, você precisará ter instalado:
 
 * **JDK (Java Development Kit)** - Versão 11 ou superior.
 
+## Configurando o Cliente (`config.properties`)
+
+Antes de executar o cliente, é necessário informar a ele como encontrar o servidor. Isso é feito através de um arquivo de configuração.
+
+1.  Crie um arquivo chamado `config.properties` na raiz do seu projeto.
+2.  Adicione o seguinte conteúdo a ele, substituindo o IP pelo endereço da máquina onde o servidor está rodando:
+
+    ```properties
+    # Endereço IP da máquina onde o Servidor está rodando
+    server.address=192.168.0.15
+
+    # Porta em que o Servidor está escutando (deve ser a mesma do servidor)
+    server.port=12345
+    ```
+* **Para testes locais (servidor e cliente na mesma máquina):** use `server.address=localhost`.
+* **Para conectar via rede local:** use o endereço IP da máquina servidora (ex: `192.168.0.15`).
+
 ## Como Compilar e Executar 🚀
 
-Siga os passos abaixo para colocar o chat em funcionamento. Todos os comandos devem ser executados a partir da raiz do projeto.
+Siga os passos abaixo para colocar o chat em funcionamento.
 
 ### 1. Clone o Repositório
 
@@ -49,18 +66,12 @@ Você deverá ver a mensagem: `Servidor iniciando na porta 12345. Aguardando cli
 
 ### 4. Inicie os Clientes
 
-Para cada cliente que você quiser conectar, **abra um novo terminal** e execute o comando abaixo, fornecendo o endereço IP do servidor.
+Após configurar o arquivo `config.properties`, para cada cliente que você quiser conectar, **abra um novo terminal** e execute o seguinte comando simples:
 
 ```bash
-# Para conectar ao servidor na mesma máquina (local)
-java -cp out client.Client localhost
-
-# Para conectar a um servidor em outra máquina na rede (exemplo)
-java -cp out client.Client 192.168.0.15
+java -cp out client.Client
 ```
-*Opcionalmente, você pode fornecer uma porta como segundo argumento: `java -cp out client.Client 192.168.0.15 50000`*
-
-Como alternativa, o cliente também pode ser configurado através de um arquivo `config.properties` na raiz do projeto.
+O cliente lerá automaticamente as configurações do arquivo `config.properties` para saber a qual servidor se conectar. Repita este passo para quantos clientes desejar.
 
 ## Como Usar o Chat
 
@@ -114,6 +125,6 @@ A transferência iniciará automaticamente. O arquivo será salvo em uma pasta `
 │       ├── Server.java            # Lógica principal do servidor
 │       ├── ClientHandler.java     # Lógica para gerenciar o chat de texto de um cliente
 │       └── FileTransferHandler.java # Lógica para gerenciar a transferência de um arquivo
-├── config.properties         # (Opcional) Arquivo de configuração do cliente
+├── config.properties         # Arquivo de configuração do cliente
 └── README.md
 ```
