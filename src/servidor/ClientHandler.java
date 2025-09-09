@@ -1,7 +1,6 @@
 package servidor;
 
-import java.io.BufferedReader;
-import java.io.IOException;
+import java.io.BufferedReader; import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
@@ -48,7 +47,25 @@ public class ClientHandler implements Runnable {
           break;
         }
 
-        if (clientMessage.startsWith("@")) {
+        if (clientMessage.startsWith("SENDFILE_REQUEST")) {
+          String[] parts = clientMessage.split(" ", 4);
+          if (parts.length == 4) {
+            // O ClientHandler não acessa o arquivo, apenas repassa a intenção
+            // A lógica de ler o arquivo fica no próprio Cliente.
+            // Ex: SENDFILE_REQUEST @bob relatorio.pdf 123456
+            String recipient = parts[1];
+            String filePath = parts[2];
+            long fileSize = Long.parseLong(parts[3]);
+
+            Server.requestFileTransfer(this.username, recipient, filePath, fileSize);
+          }
+        } else if (clientMessage.startsWith("SENDFILE_ACCEPT")) {
+          String[] parts = clientMessage.split(" ", 2);
+          if (parts.length == 2) {
+            String sender = parts[1];
+            Server.prepareFileTransfer(sender, this.username);
+          }
+        } else if (clientMessage.startsWith("@")) {
           // Divide a msg em destinatario e conteudo
           String[] parts = clientMessage.split(" ", 2);
           if (parts.length == 2) {

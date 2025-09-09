@@ -1,6 +1,7 @@
 package servidor;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
@@ -35,7 +36,6 @@ public class Server {
         // Cria um novo handler para o cliente e o submete ao pool de threads.
         // O servidor principal não fica bloqueado e pode aceitar outros clientes.
         ClientHandler clientHandler = new ClientHandler(clientSocket);
-
         pool.execute(clientHandler);
       }
     } catch (IOException e) {
@@ -84,7 +84,6 @@ public class Server {
     }
   }
 
-
   /**
    * Envia uma mensagem privada de um usuário para outro.
    *
@@ -107,6 +106,38 @@ public class Server {
       if (senderHandler != null) {
         senderHandler.sendMessage("Servidor: Usuário '" + recipientUsername + "' não encontrado ou offline.");
       }
+    }
+  }
+
+  public static void requestFileTransfer(String sender, String recipient, String filePath, long fileSize) {
+    ClientHandler recipientHandler = clients.get(recipient);
+    if (recipientHandler != null) {
+      recipientHandler.sendMessage(String.format("INCOMING_FILE @%s %s %d", sender, filePath, fileSize));
+    } else {
+      clients.get(sender).sendMessage("Servidor: Destinatário " + recipient + " não encontrado.");
+    }
+  }
+
+  public static void prepareFileTransfer(String sender, String recipient) {
+    try {
+      ServerSocket fileSocket = new ServerSocket(0); // porta aleatoria
+      int port = fileSocket.getLocalPort();
+
+      // Inicia uma nova thread para gerenciar a transferência
+      FileTransferHandler transferHandler = new FileTransferHandler(fileSocket, sender, recipient);
+      pool.execute(transferHandler);
+
+      // Obtém o endereço IP local do servidor dinamicamente
+      String ip = InetAddress.getLocalHost().getHostAddress();
+
+      System.out.println("Iniciando transferência de arquivo. IP: " + ip + ", Porta: " + port);
+
+      // Avisa ambos os clientes para se conectarem ao novo canal usando o IP correto
+      clients.get(sender).sendMessage(String.format("TRANSFER_READY %s %d @%s", ip, port, recipient));
+      clients.get(recipient).sendMessage(String.format("TRANSFER_READY %s %d @%s", ip, port, sender));
+
+    } catch (Exception e) {
+      e.printStackTrace();
     }
   }
 }
