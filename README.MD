@@ -1,15 +1,15 @@
 # Chat Distribuído em Java ☕
 
-Este é um projeto de um sistema de chat distribuído, desenvolvido em Java puro, utilizando Sockets para a comunicação. A arquitetura segue o modelo Cliente-Servidor e permite a troca de mensagens em tempo real entre múltiplos usuários.
+Este é um projeto de um sistema de chat distribuído, desenvolvido em Java puro, utilizando Sockets para a comunicação. A arquitetura segue o modelo Cliente-Servidor e permite a troca de mensagens e arquivos em tempo real entre múltiplos usuários.
 
 ## Funcionalidades ✨
 
 * **Chat em Grupo (Broadcast):** Mensagens enviadas por um usuário são recebidas por todos os outros usuários conectados.
 * **Mensagens Privadas:** Um usuário pode enviar uma mensagem que será lida apenas pelo destinatário específico.
+* **Envio de Arquivos entre Usuários:** Permite que um usuário envie um arquivo (de qualquer tipo) para outro de forma segura, com um protocolo de negociação (handshake) que exige a aceitação do destinatário.
 * **Notificações de Conexão/Desconexão:** O chat anuncia quando um novo usuário entra ou sai.
 * **Timestamp:** Todas as mensagens exibem o horário em que foram enviadas, facilitando a leitura.
 * **Servidor Concorrente:** O servidor utiliza um pool de threads para gerenciar múltiplas conexões de clientes simultaneamente.
-
 
 ## Pré-requisitos
 
@@ -49,16 +49,24 @@ Você deverá ver a mensagem: `Servidor iniciando na porta 12345. Aguardando cli
 
 ### 4. Inicie os Clientes
 
-Para cada cliente que você quiser conectar, **abra um novo terminal** e execute o comando abaixo. Você pode repetir este passo quantas vezes quiser para simular uma conversa com múltiplos usuários.
+Para cada cliente que você quiser conectar, **abra um novo terminal** e execute o comando abaixo, fornecendo o endereço IP do servidor.
 
 ```bash
-java -cp out client.Client
+# Para conectar ao servidor na mesma máquina (local)
+java -cp out client.Client localhost
+
+# Para conectar a um servidor em outra máquina na rede (exemplo)
+java -cp out client.Client 192.168.0.15
 ```
-Cada terminal se tornará uma janela de chat para um usuário diferente.
+*Opcionalmente, você pode fornecer uma porta como segundo argumento: `java -cp out client.Client 192.168.0.15 50000`*
+
+Como alternativa, o cliente também pode ser configurado através de um arquivo `config.properties` na raiz do projeto.
 
 ## Como Usar o Chat
 
 Após se conectar, você verá uma mensagem de boas-vindas.
+
+### Comandos de Mensagem
 
 * **Enviar mensagem para todos:** Simplesmente digite sua mensagem e pressione `Enter`.
     ```
@@ -70,15 +78,42 @@ Após se conectar, você verá uma mensagem de boas-vindas.
     ```
 * **Sair do chat:** Digite `sair` e pressione `Enter`.
 
+### Enviando um Arquivo 📂
+
+O envio de arquivos ocorre em duas etapas: a oferta e a aceitação.
+
+1.  **Para oferecer um arquivo:**
+    Use o comando `/sendfile <destinatario> <caminho_completo_do_arquivo>`.
+
+    * **Exemplo no Windows:**
+        ```
+        /sendfile ana C:\Users\Erik\Documentos\trabalho.pdf
+        ```
+    * **Exemplo no Linux/macOS:**
+        ```
+        /sendfile ana /home/erik/documentos/foto.jpg
+        ```
+2.  **Para aceitar um arquivo:**
+    O destinatário receberá uma notificação. Para confirmar o recebimento, ele deve usar o comando `/accept <remetente>`.
+
+    * **Exemplo:**
+        ```
+        /accept erik
+        ```
+A transferência iniciará automaticamente. O arquivo será salvo em uma pasta `downloads` criada no diretório onde o cliente foi executado.
+
 ## Estrutura do Projeto
 
 ```
 .
-├── out/                  # Diretório para os arquivos .class compilados
-└── src/
-    ├── cliente/
-    │   └── Client.java   # Lógica do lado do cliente
-    └── servidor/
-        ├── Server.java        # Lógica principal do servidor
-        └── ClientHandler.java # Lógica para gerenciar cada cliente
+├── out/                      # Diretório para os arquivos .class compilados
+├── src/
+│   ├── cliente/
+│   │   └── Client.java       # Lógica do lado do cliente
+│   └── servidor/
+│       ├── Server.java            # Lógica principal do servidor
+│       ├── ClientHandler.java     # Lógica para gerenciar o chat de texto de um cliente
+│       └── FileTransferHandler.java # Lógica para gerenciar a transferência de um arquivo
+├── config.properties         # (Opcional) Arquivo de configuração do cliente
+└── README.md
 ```
