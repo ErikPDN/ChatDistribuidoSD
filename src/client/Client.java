@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
@@ -21,6 +22,9 @@ public class Client {
   private static Map<String, String[]> pendingFileOffers = new HashMap<>();
   // Armazena o caminho do arquivo que este cliente ofereceu para envio
   private static String fileToSendPath = null;
+
+  // Timeout para conexões de transferência de arquivo (30 segundos)
+  private static final int FILE_TRANSFER_TIMEOUT = 30000;
 
   public static void main(String[] args) {
     Properties props = new Properties();
@@ -66,13 +70,18 @@ public class Client {
               String peer = parts[3].substring(1);
 
               String fileNameToReceive = null;
+              long fileSizeToReceive = 0; 
+              
               if (pendingFileOffers.containsKey(peer)) {
-                fileNameToReceive = pendingFileOffers.get(peer)[0];
+                String[] offer = pendingFileOffers.get(peer);
+                fileNameToReceive = offer[0];
+                fileSizeToReceive = Long.parseLong(offer[1]);
                 pendingFileOffers.remove(peer);
               }
-
+              
               String finalFileName = fileNameToReceive;
-              new Thread(() -> handlerFileTransfer(ip, port, finalFileName)).start();
+              long finalFileSize = fileSizeToReceive;
+              new Thread(() -> handlerFileTransfer(ip, port, finalFileName, finalFileSize)).start();
             } else {
               System.out.println(serverMessage);
             }
@@ -146,14 +155,14 @@ public class Client {
   /**
    * Lida com a conexão ao socket de transferência e decide se envia ou recebe.
    */
-  private static void handlerFileTransfer(String ip, int port, String fileName) {
+  private static void handlerFileTransfer(String ip, int port, String fileName, long fileSize) {
     if (fileToSendPath != null) {
       // Se temos um arquivo para enviar, somos o remetente
       sendFile(fileToSendPath, ip, port);
       fileToSendPath = null;
     } else {
       // Caso contrário, somos o destinatário. Precisamos encontrar a oferta.
-      receiveFile(ip, port, fileName);
+      receiveFile(ip, port, fileName, fileSize);
     }
   }
 
@@ -164,17 +173,38 @@ public class Client {
     File file = new File(filePath);
     System.out.printf("Iniciando envio de '%s' para %s:%d...%n", file.getName(), ip, port);
 
-    try (Socket fileSocket = new Socket(ip, port);
-        FileInputStream fileIn = new FileInputStream(file);
-        OutputStream socketOut = fileSocket.getOutputStream()) {
+    try (Socket fileSocket = new Socket(ip, port)) {
+      fileSocket.setSoTimeout(FILE_TRANSFER_TIMEOUT);
 
-      byte[] buffer = new byte[4096];
-      int bytesRead;
-      while ((bytesRead = fileIn.read(buffer)) != -1) {
-        socketOut.write(buffer, 0, bytesRead);
+      try (FileInputStream fileIn = new FileInputStream(file);
+          OutputStream socketOut = fileSocket.getOutputStream()) {
+
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        long totalBytes = 0;
+        long totalSize = file.length();
+        int lastPercent = -1;
+
+        while ((bytesRead = fileIn.read(buffer)) != -1) {
+          socketOut.write(buffer, 0, bytesRead);
+          totalBytes += bytesRead;
+
+          int currentPercent = (int) ((double) totalBytes / totalSize * 100);
+          if (currentPercent > lastPercent) {
+            printProgress(totalBytes, totalSize);
+            lastPercent = currentPercent;
+          }
+        }
+
+        if (lastPercent < 100) {
+          printProgress(totalSize, totalSize);
+        }
+
+        System.out.printf("Envio de arquivo '%s' concluído. Total: %.2f MB%n",
+            file.getName(), totalBytes / (1024.0 * 1024.0));
       }
-
-      System.out.println("Envio de arquivo concluído.");
+    } catch (SocketTimeoutException e) {
+      System.out.println("Timeout ao enviar arquivo - conexão muito lenta ou perdida.");
     } catch (Exception e) {
       System.out.println("Erro ao enviar arquivo: " + e.getMessage());
     }
@@ -183,12 +213,15 @@ public class Client {
   /**
    * Conecta-se ao socket de transferência e recebe um arquivo.
    */
-  private static void receiveFile(String ip, int port, String fileName) {
-    System.out.printf("Iniciando recebimento de arquivo para %s:%d...%n", ip, port);
+  private static void receiveFile(String ip, int port, String fileName, long totalSize) {
+    System.out.printf("Iniciando recebimento de arquivo de %s:%d", ip, port);
 
     File downloadsDir = new File("Downloads");
     if (!downloadsDir.exists()) {
-      downloadsDir.mkdir();
+      if (!downloadsDir.mkdir()) {
+        System.err.println("Erro: Não foi possível criar diretório Downloads");
+        return;
+      }
     }
 
     if (fileName == null) {
@@ -196,18 +229,71 @@ public class Client {
       return;
     }
 
-    try (Socket fileSocket = new Socket(ip, port);
-        InputStream socketIn = fileSocket.getInputStream();
-        FileOutputStream fileOut = new FileOutputStream(new File(downloadsDir, fileName))) {
-
-      byte[] buffer = new byte[4096];
-      int bytesRead;
-      while ((bytesRead = socketIn.read(buffer)) != -1) {
-        fileOut.write(buffer, 0, bytesRead);
+    // Evita sobrescrever arquivos
+    File targetFile = new File(downloadsDir, fileName);
+    int counter = 1;
+    while (targetFile.exists()) {
+      String nameWithoutExt = fileName;
+      String extension = "";
+      int lastDot = fileName.lastIndexOf('.');
+      if (lastDot > 0) {
+        nameWithoutExt = fileName.substring(0, lastDot);
+        extension = fileName.substring(lastDot);
       }
-      System.out.println("Arquivo '" + fileName + "' recebido com sucesso.");
+      targetFile = new File(downloadsDir, nameWithoutExt + "_" + counter + extension);
+      counter++;
+    }
+
+    try (Socket fileSocket = new Socket(ip, port)) {
+      fileSocket.setSoTimeout(FILE_TRANSFER_TIMEOUT);
+
+      try (InputStream socketIn = fileSocket.getInputStream();
+          FileOutputStream fileOut = new FileOutputStream(targetFile)) {
+
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        long totalBytes = 0;
+
+        while ((bytesRead = socketIn.read(buffer)) != -1) {
+          fileOut.write(buffer, 0, bytesRead);
+          totalBytes += bytesRead;
+          printProgress(totalBytes, totalSize);
+        }
+
+        System.out.printf("Arquivo '%s' recebido com sucesso. Total: %.2f MB%n",
+            targetFile.getName(), totalBytes / (1024.0 * 1024.0));
+      }
+    } catch (SocketTimeoutException e) {
+      System.out.println("Timeout ao receber arquivo - conexão muito lenta ou perdida.");
     } catch (IOException e) {
       System.err.println("Erro ao receber arquivo: " + e.getMessage());
     }
   }
+
+  /*
+   * Barra de progresso
+   */
+  private static void printProgress(long bytesTransferred, long totalBytes) {
+    int barLength = 50; // número de caracteres da barra
+    double percent = (double) bytesTransferred / totalBytes;
+    int filled = (int) (barLength * percent);
+
+    StringBuilder bar = new StringBuilder();
+    bar.append("\r["); // \r volta o cursor pro início da linha
+    for (int i = 0; i < filled; i++) {
+      bar.append("=");
+    }
+    for (int i = filled; i < barLength; i++) {
+      bar.append(" ");
+    }
+    bar.append("] ");
+    bar.append(String.format("%.2f%%", percent * 100));
+
+    System.out.print(bar.toString());
+
+    if (bytesTransferred >= totalBytes) {
+      System.out.println(); // quebra linha no fim
+    }
+  }
+
 }

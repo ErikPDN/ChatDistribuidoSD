@@ -43,7 +43,8 @@ public class ClientHandler implements Runnable {
       String clientMessage;
 
       while ((clientMessage = reader.readLine()) != null) {
-        if ("sair".equalsIgnoreCase(clientMessage.trim())) {
+        clientMessage = clientMessage.trim();
+        if ("sair".equalsIgnoreCase(clientMessage)) {
           break;
         }
 

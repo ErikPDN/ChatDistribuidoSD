@@ -17,9 +17,7 @@ public class Server {
   // Um pool de threads para gerenciar os clientes de forma eficiente.
   // Evita o custo de criar uma nova thread para cada cliente.
   private static final ExecutorService pool = Executors.newCachedThreadPool();
-
   private static final Map<String, ClientHandler> clients = new ConcurrentHashMap<>();
-
   private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
   public static void main(String[] args) {
@@ -120,8 +118,9 @@ public class Server {
 
   public static void prepareFileTransfer(String sender, String recipient) {
     try {
-      ServerSocket fileSocket = new ServerSocket(0); // porta aleatoria
-      int port = fileSocket.getLocalPort();
+      // Define uma faixa de portas para transferência (mais amigável ao firewall)
+      int port = findAvailablePort(13000, 13100);
+      ServerSocket fileSocket = new ServerSocket(port);
 
       // Inicia uma nova thread para gerenciar a transferência
       FileTransferHandler transferHandler = new FileTransferHandler(fileSocket, sender, recipient);
@@ -137,7 +136,32 @@ public class Server {
       clients.get(recipient).sendMessage(String.format("TRANSFER_READY %s %d @%s", ip, port, sender));
 
     } catch (Exception e) {
+      System.err.println("Erro ao preparar transferência de arquivo: " + e.getMessage());
       e.printStackTrace();
+
+      // Notifica os clientes sobre o erro
+      ClientHandler senderHandler = clients.get(sender);
+      if (senderHandler != null) {
+        senderHandler.sendMessage("Servidor: Erro ao preparar transferência de arquivo.");
+      }
+    }
+  }
+
+  /**
+   * Encontra uma porta disponível na faixa especificada
+   */
+  private static int findAvailablePort(int startPort, int endPort) throws IOException {
+    for (int port = startPort; port < endPort; port++) {
+      try (ServerSocket socket = new ServerSocket(port)) {
+        return port;
+      } catch (Exception e) {
+        System.err.println("Porta: " + port + " ocupada.");
+      }
+    }
+
+    // Se não encontrar nenhuma porta na faixa, usa porta aleatória
+    try (ServerSocket socket = new ServerSocket(0)) {
+      return socket.getLocalPort();
     }
   }
 }
