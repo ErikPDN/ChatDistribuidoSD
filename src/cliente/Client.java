@@ -87,7 +87,7 @@ public class Client {
               int port = Integer.parseInt(parts[2]);
               String fileName = parts[3];
               long fileSize = Long.parseLong(parts[4]);
-              new Thread(() -> receiveFile(ip, port, fileName, fileSize));
+              new Thread(() -> receiveFile(ip, port, fileName, fileSize)).start();
             } else if (serverMessage.startsWith("TRANSFER_READY")) {
               String[] parts = serverMessage.split(" ", 4);
               String ip = parts[1];
