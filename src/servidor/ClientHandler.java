@@ -55,16 +55,27 @@ public class ClientHandler implements Runnable {
             // A lógica de ler o arquivo fica no próprio Cliente.
             // Ex: SENDFILE_REQUEST @bob relatorio.pdf 123456
             String recipient = parts[1];
-            String filePath = parts[2];
+            String fileName = parts[2];
             long fileSize = Long.parseLong(parts[3]);
 
-            Server.requestFileTransfer(this.username, recipient, filePath, fileSize);
+            if ("@all".equalsIgnoreCase(recipient)) {
+              Server.initiateBroadcastUpload(this.username, fileName, fileSize);
+            } else {
+              Server.requestFileTransfer(this.username, recipient, fileName, fileSize);
+            }
+
           }
         } else if (clientMessage.startsWith("SENDFILE_ACCEPT")) {
           String[] parts = clientMessage.split(" ", 2);
           if (parts.length == 2) {
             String sender = parts[1];
             Server.prepareFileTransfer(sender, this.username);
+          }
+        } else if (clientMessage.startsWith("/download")) {
+          String[] parts = clientMessage.split(" ", 2);
+          if (parts.length == 2) {
+            String fileName = parts[1];
+            Server.handleDownloadRequest(this.username, fileName);
           }
         } else if (clientMessage.startsWith("@")) {
           // Divide a msg em destinatario e conteudo

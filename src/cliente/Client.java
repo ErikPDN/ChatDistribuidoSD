@@ -1,4 +1,4 @@
-package client;
+package cliente;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -63,6 +63,31 @@ public class Client {
 
               System.out.printf("\n>>> %s quer te enviar o arquivo '%s' (%s bytes).%n", sender, fileName, fileSize);
               System.out.printf(">>> Para aceitar, digite: /accept %s%n", sender);
+            } else if (serverMessage.startsWith("BROADCAST_FILE")) {
+              // Servidor notifica sobre um arquivo compartilhado: BROADCAST_FILE @remetente
+              // nome_arquivo
+              String[] parts = serverMessage.split(" ", 4);
+              String sender = parts[1].substring(1); // remove o @
+              String fileName = parts[2];
+              String fileSize = parts[3];
+              System.out.printf("\n>>> %s compartilhou o arquivo '%s' (%s bytes).%n", sender, fileName, fileSize);
+              System.out.printf(">>> Para baixar, digite: /download %s%n", fileName);
+            } else if (serverMessage.startsWith("UPLOAD_READY")) {
+              // Servidor está pronto para receber nosso upload: UPLOAD_READY ip porta
+              // nome_arquivo
+              String[] parts = serverMessage.split(" ", 4);
+              String ip = parts[1];
+              int port = Integer.parseInt(parts[2]);
+              new Thread(() -> uploadFile(fileToSendPath, ip, port)).start();
+            } else if (serverMessage.startsWith("DOWNLOAD_READY")) {
+              // Servidor está pronto para nos enviar um arquivo: DOWNLOAD_READY ip porta
+              // nome_arquivo
+              String[] parts = serverMessage.split(" ", 5);
+              String ip = parts[1];
+              int port = Integer.parseInt(parts[2]);
+              String fileName = parts[3];
+              long fileSize = Long.parseLong(parts[4]);
+              new Thread(() -> receiveFile(ip, port, fileName, fileSize));
             } else if (serverMessage.startsWith("TRANSFER_READY")) {
               String[] parts = serverMessage.split(" ", 4);
               String ip = parts[1];
@@ -70,15 +95,15 @@ public class Client {
               String peer = parts[3].substring(1);
 
               String fileNameToReceive = null;
-              long fileSizeToReceive = 0; 
-              
+              long fileSizeToReceive = 0;
+
               if (pendingFileOffers.containsKey(peer)) {
                 String[] offer = pendingFileOffers.get(peer);
                 fileNameToReceive = offer[0];
                 fileSizeToReceive = Long.parseLong(offer[1]);
                 pendingFileOffers.remove(peer);
               }
-              
+
               String finalFileName = fileNameToReceive;
               long finalFileSize = fileSizeToReceive;
               new Thread(() -> handlerFileTransfer(ip, port, finalFileName, finalFileSize)).start();
@@ -134,9 +159,9 @@ public class Client {
           } else {
             System.out.println("Formato inválido. Use: /accept <remetente>");
           }
-        }
-
-        else {
+        } else if (userInput.startsWith("/download")) {
+          writer.println(userInput);
+        } else {
           // Mensagem normal de chat
           writer.println(userInput);
           if ("sair".equalsIgnoreCase(userInput.trim())) {
@@ -294,6 +319,16 @@ public class Client {
     if (bytesTransferred >= totalBytes) {
       System.out.println(); // quebra linha no fim
     }
+  }
+
+  /*
+   * Barra de progresso
+   */
+  private static void uploadFile(String filePath, String ip, int port) {
+    File file = new File(filePath);
+    System.out.printf("Iniciando upload de '%s' para o servidor em %s:%d...%n", file.getName(), ip, port);
+    sendFile(filePath, ip, port);
+    fileToSendPath = null;
   }
 
 }

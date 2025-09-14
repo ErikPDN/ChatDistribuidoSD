@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -19,6 +20,8 @@ public class Server {
   private static final ExecutorService pool = Executors.newCachedThreadPool();
   private static final Map<String, ClientHandler> clients = new ConcurrentHashMap<>();
   private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+
+  private static final Map<String, Object[]> sharedFiles = new ConcurrentHashMap<>();
 
   public static void main(String[] args) {
     System.out.println("Iniciando servidor do chat...");
@@ -148,6 +151,73 @@ public class Server {
   }
 
   /**
+   * Método para iniciar o UPLOAD de um arquivo de broadcast
+   */
+  public static void initiateBroadcastUpload(String senderUsername, String fileName, long fileSize) {
+    try {
+      // Gera um nome de arquivo único para evitar colisões
+      String uniqueID = UUID.randomUUID().toString();
+      String tempFilePath = "temp_uploads/" + uniqueID + "_" + fileName;
+
+      int port = findAvailablePort(13000, 13100);
+      ServerSocket uploadSocket = new ServerSocket(port);
+
+      // Inicia um handler para receber o arquivo do client
+      pool.execute(new FileUploadHandler(uploadSocket, tempFilePath, senderUsername, fileName));
+
+      String ip = InetAddress.getLocalHost().getHostAddress();
+
+      // Avisa o cliente remetente para iniciar o upload
+      clients.get(senderUsername).sendMessage(String.format("UPLOAD_READY %s %d %s", ip, port, fileName));
+
+    } catch (Exception e) {
+      e.printStackTrace();
+      clients.get(senderUsername).sendMessage("Servidor: Erro preparar o upload do arquivo.");
+    }
+  }
+
+  /**
+   * Método para iniciar o UPLOAD de um arquivo de broadcast
+   */
+  public static void notifyFileBroadcast(String senderUsername, String originalFileName, String tempFilePath, long fileSize) {
+    System.out.println("Arquivo " + originalFileName + " recebido de " + senderUsername + ". Notificando a todos.");
+    sharedFiles.put(originalFileName, new Object[]{tempFilePath, fileSize});
+
+    String notification = String.format("BROADCAST_FILE @%s %s %d", senderUsername, originalFileName, fileSize);
+    for (ClientHandler handler : clients.values()) {
+      if (!handler.getUsername().equals(senderUsername))
+        handler.sendMessage(notification);
+    }
+  }
+
+  /**
+   * Método para iniciar o UPLOAD de um arquivo de broadcast
+   */
+  public static void handleDownloadRequest(String requesterUsername, String fileName) {
+    if (sharedFiles.containsKey(fileName)) {
+      try {
+        Object[] fileInfo = sharedFiles.get(fileName);
+        String filePathOnServer = (String) fileInfo[0];
+        long fileSize = (long) fileInfo[1];
+
+        int port = findAvailablePort(13000, 13100);
+        ServerSocket downloadSocket = new ServerSocket(port);
+
+        pool.execute(new FileDownloadHandler(downloadSocket, filePathOnServer));
+        
+        String ip = InetAddress.getLocalHost().getHostAddress();
+        clients.get(requesterUsername).sendMessage(String.format("DOWNLOAD_READY %s %d %s %d", ip, port, fileName, fileSize));
+
+      } catch (Exception e) {
+        e.printStackTrace();
+        clients.get(requesterUsername).sendMessage("Servidor: Erro ao preparar o download do arquivo.");
+      }
+    } else { 
+      clients.get(requesterUsername).sendMessage("Servidor: Arquivo '" + fileName + "' não encontrado ou expirado.");
+    }
+  }
+
+  /**
    * Encontra uma porta disponível na faixa especificada
    */
   private static int findAvailablePort(int startPort, int endPort) throws IOException {
@@ -156,12 +226,11 @@ public class Server {
         return port;
       } catch (Exception e) {
         System.err.println("Porta: " + port + " ocupada.");
+        continue;
       }
     }
 
-    // Se não encontrar nenhuma porta na faixa, usa porta aleatória
-    try (ServerSocket socket = new ServerSocket(0)) {
-      return socket.getLocalPort();
-    }
+    // Se não encontrou nenhuma porta livre no intervalo
+    throw new RuntimeException("Nenhuma porta livre encontrada no intervalo " + startPort + "-" + endPort);
   }
 }
