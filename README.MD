@@ -6,7 +6,8 @@ Este é um projeto de um sistema de chat distribuído, desenvolvido em Java puro
 
 * **Chat em Grupo (Broadcast):** Mensagens enviadas por um usuário são recebidas por todos os outros usuários conectados.
 * **Mensagens Privadas:** Um usuário pode enviar uma mensagem que será lida apenas pelo destinatário específico.
-* **Envio de Arquivos entre Usuários:** Permite que um usuário envie um arquivo (de qualquer tipo) para outro de forma segura, com um protocolo de negociação (handshake) que exige a aceitação do destinatário.
+* **Envio de Arquivos Privado:** Permite que um usuário envie um arquivo diretamente para outro de forma segura, com um protocolo de negociação (handshake) que exige a aceitação do destinatário.
+* **Compartilhamento de Arquivos em Grupo:** Um usuário pode fazer o upload de um arquivo para o servidor, que então notifica a todos os outros usuários. Os demais podem então baixar o arquivo individualmente.
 * **Notificações de Conexão/Desconexão:** O chat anuncia quando um novo usuário entra ou sai.
 * **Timestamp:** Todas as mensagens exibem o horário em que foram enviadas, facilitando a leitura.
 * **Servidor Concorrente:** O servidor utiliza um pool de threads para gerenciar múltiplas conexões de clientes simultaneamente.
@@ -89,29 +90,43 @@ Após se conectar, você verá uma mensagem de boas-vindas.
     ```
 * **Sair do chat:** Digite `sair` e pressione `Enter`.
 
-### Enviando um Arquivo 📂
+### Compartilhando Arquivos 📂
 
-O envio de arquivos ocorre em duas etapas: a oferta e a aceitação.
+O compartilhamento de arquivos pode ser feito de duas maneiras: enviando para um único usuário ou para todos.
 
-1.  **Para oferecer um arquivo:**
-    Use o comando `/sendfile <destinatario> <caminho_completo_do_arquivo>`.
+#### 1. Envio Privado (Usuário para Usuário)
 
-    * **Exemplo no Windows:**
-        ```
-        /sendfile ana C:\Users\Erik\Documentos\trabalho.pdf
-        ```
-    * **Exemplo no Linux/macOS:**
-        ```
-        /sendfile ana /home/erik/documentos/foto.jpg
-        ```
-2.  **Para aceitar um arquivo:**
-    O destinatário receberá uma notificação. Para confirmar o recebimento, ele deve usar o comando `/accept <remetente>`.
+Este envio ocorre em duas etapas: a oferta e a aceitação.
 
-    * **Exemplo:**
-        ```
-        /accept erik
-        ```
-A transferência iniciará automaticamente. O arquivo será salvo em uma pasta `downloads` criada no diretório onde o cliente foi executado.
+* **Para oferecer um arquivo:** Use o comando `/sendfile <destinatario> <caminho_completo_do_arquivo>`.
+    * **Exemplo:** `/sendfile ana C:\Users\Erik\Documentos\trabalho.pdf`
+
+* **Para aceitar um arquivo:** O destinatário receberá uma notificação. Para confirmar, ele deve usar o comando `/accept <remetente>`.
+    * **Exemplo:** `/accept erik`
+
+A transferência iniciará automaticamente entre os dois usuários, com o servidor atuando como intermediário.
+
+#### 2. Envio para Todos (Broadcast)
+
+Este envio ocorre em três etapas: upload, notificação e download.
+
+* **Passo A: O remetente envia o arquivo para o servidor.**
+    Use o destinatário especial `@all` no comando `/sendfile`.
+    * **Exemplo:** `/sendfile @all C:\Users\Erik\Documentos\anuncio.pdf`
+    O arquivo será enviado para o servidor, que o armazenará temporariamente.
+
+* **Passo B: O servidor notifica a todos.**
+    Os outros usuários verão uma mensagem no chat:
+    ```
+    >>> Erik compartilhou o arquivo 'anuncio.pdf'.
+    >>> Para baixar, digite: /download anuncio.pdf
+    ```
+
+* **Passo C: Outros usuários baixam o arquivo.**
+    Qualquer usuário que desejar o arquivo pode usar o comando `/download <nome_do_arquivo>`.
+    * **Exemplo:** `/download anuncio.pdf`
+
+A transferência iniciará do servidor para o cliente. O arquivo será salvo em uma pasta `downloads`.
 
 ## Estrutura do Projeto
 
@@ -123,8 +138,10 @@ A transferência iniciará automaticamente. O arquivo será salvo em uma pasta `
 │   │   └── Client.java       # Lógica do lado do cliente
 │   └── servidor/
 │       ├── Server.java            # Lógica principal do servidor
-│       ├── ClientHandler.java     # Lógica para gerenciar o chat de texto de um cliente
-│       └── FileTransferHandler.java # Lógica para gerenciar a transferência de um arquivo
+│       ├── ClientHandler.java     # Gerencia o chat de texto de um cliente
+│       ├── FileTransferHandler.java # Gerencia transferência privada (ponto-a-ponto)
+│       ├── FileUploadHandler.java   # Gerencia o upload de um arquivo para o servidor
+│       └── FileDownloadHandler.java # Gerencia o download de um arquivo do servidor
 ├── config.properties         # Arquivo de configuração do cliente
 └── README.md
 ```
